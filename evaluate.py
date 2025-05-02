@@ -20,7 +20,7 @@ def evaluate_model(ModelClass, X_train, y_train, X_test, y_test, data_fractions)
             acc = accuracy_score(y_test, model.predict(X_test))
             times.append(time.time() - start)
             accs.append(acc)
-        print(f"[{ModelClass.__name__}] [{frac*100:.0f}%] Accuracy = {np.mean(accs):.4f} ± {np.std(accs):.4f}, Time = {np.mean(times):.2f}s")
+        print(f"[{ModelClass.__name__}][{frac*100:.0f}%] Accuracy = {np.mean(accs):.4f} ± {np.std(accs):.4f}, Time = {np.mean(times):.2f}s")
     return results
 
 def evaluate_torch_model(ModelClass, X_train, y_train, X_test, y_test, data_fractions, epochs = 15):
@@ -49,5 +49,5 @@ def evaluate_torch_model(ModelClass, X_train, y_train, X_test, y_test, data_frac
                 acc = (model(X_test_tensor).argmax(1) == y_test_tensor).float().mean().item()
             times.append(time.time() - start)
             accs.append(acc)
-        print(f"[{ModelClass.__name__}] [{frac*100:.0f}%] Accuracy = {np.mean(accs):.4f} ± {np.std(accs):.4f}, Time = {np.mean(times):.2f}s")
+        print(f"[{ModelClass.__name__}][{frac*100:.0f}%] Accuracy = {np.mean(accs):.4f} ± {np.std(accs):.4f}, Time = {np.mean(times):.2f}s")
     return results
