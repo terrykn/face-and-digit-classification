@@ -45,7 +45,7 @@ class NeuralNetwork:
         grad_weights1 = np.dot(inputs.T, hidden1_error) / num_examples
         grad_biases1 = np.sum(hidden1_error, axis=0, keepdims=True) / num_examples
 
-        # add regularization 
+        # add regularization to the weight gradients
         grad_weights3 += self.lambda_reg * self.weights3
         grad_weights2 += self.lambda_reg * self.weights2
         grad_weights1 += self.lambda_reg * self.weights1
