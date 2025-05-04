@@ -1,70 +1,84 @@
 import numpy as np
 
 class NeuralNetwork:
-    def __init__(self, input_size, hidden_size1, hidden_size2, output_size, learning_rate=0.01, lambda_reg=0.01):
-        self.learning_rate = learning_rate
+    def __init__(self,
+                 input_size,
+                 hidden_size1,
+                 hidden_size2,
+                 output_size,
+                 learning_rate=0.05,
+                 lambda_reg=0.001):
+        self.lr         = learning_rate
         self.lambda_reg = lambda_reg
 
-        # initialize weights and biases
-        self.weights1 = np.random.randn(input_size, hidden_size1) * 0.01
-        self.biases1 = np.zeros((1, hidden_size1))
+        # He‐init for ReLU hidden layers
+        self.W1 = np.random.randn(input_size,  hidden_size1) * np.sqrt(2/input_size)
+        self.b1 = np.zeros((1, hidden_size1))
 
-        self.weights2 = np.random.randn(hidden_size1, hidden_size2) * 0.01
-        self.biases2 = np.zeros((1, hidden_size2))
+        self.W2 = np.random.randn(hidden_size1, hidden_size2) * np.sqrt(2/hidden_size1)
+        self.b2 = np.zeros((1, hidden_size2))
 
-        self.weights3 = np.random.randn(hidden_size2, output_size) * 0.01
-        self.biases3 = np.zeros((1, output_size))
+        # Xavier‐init for softmax output
+        self.W3 = np.random.randn(hidden_size2, output_size) * np.sqrt(1/hidden_size2)
+        self.b3 = np.zeros((1, output_size))
 
-    def sigmoid(self, x):
-        return 1 / (1 + np.exp(-x))
+    def relu(self, x):
+        return np.maximum(0, x)
 
-    def sigmoid_derivative(self, a):
-        return a * (1 - a)
+    def relu_deriv(self, x):
+        return (x > 0).astype(float)
 
-    def forward(self, inputs):
-        self.hidden1_output = self.sigmoid(np.dot(inputs, self.weights1) + self.biases1)
-        self.hidden2_output = self.sigmoid(np.dot(self.hidden1_output, self.weights2) + self.biases2)
-        self.predictions = self.sigmoid(np.dot(self.hidden2_output, self.weights3) + self.biases3)
-        return self.predictions
+    def softmax(self, z):
+        exp_z = np.exp(z - np.max(z, axis=1, keepdims=True))
+        return exp_z / np.sum(exp_z, axis=1, keepdims=True)
 
-    def backward(self, inputs, true_labels):
-        num_examples = true_labels.shape[0]
-        predicted_probs = self.predictions
+    def forward(self, X):
+        self.Z1 = X.dot(self.W1) + self.b1
+        self.A1 = self.relu(self.Z1)
 
-        if true_labels.ndim == 1:
-            true_labels = np.eye(predicted_probs.shape[1])[true_labels]
-        output_error = predicted_probs - true_labels
-        grad_weights3 = np.dot(self.hidden2_output.T, output_error) / num_examples
-        grad_biases3 = np.sum(output_error, axis=0, keepdims=True) / num_examples
+        self.Z2 = self.A1.dot(self.W2) + self.b2
+        self.A2 = self.relu(self.Z2)
 
-        hidden2_error = np.dot(output_error, self.weights3.T) * self.sigmoid_derivative(self.hidden2_output)
-        grad_weights2 = np.dot(self.hidden1_output.T, hidden2_error) / num_examples
-        grad_biases2 = np.sum(hidden2_error, axis=0, keepdims=True) / num_examples
+        self.Z3 = self.A2.dot(self.W3) + self.b3
+        self.probs = self.softmax(self.Z3)
+        return self.probs
 
-        hidden1_error = np.dot(hidden2_error, self.weights2.T) * self.sigmoid_derivative(self.hidden1_output)
-        grad_weights1 = np.dot(inputs.T, hidden1_error) / num_examples
-        grad_biases1 = np.sum(hidden1_error, axis=0, keepdims=True) / num_examples
+    def backward(self, X, Y_onehot):
+        m = X.shape[0]
+        dZ3 = (self.probs - Y_onehot) / m
+        dW3 = self.A2.T.dot(dZ3) + self.lambda_reg * self.W3
+        db3 = np.sum(dZ3, axis=0, keepdims=True)
 
-        # add regularization to the weight gradients
-        grad_weights3 += self.lambda_reg * self.weights3
-        grad_weights2 += self.lambda_reg * self.weights2
-        grad_weights1 += self.lambda_reg * self.weights1
+        dA2 = dZ3.dot(self.W3.T)
+        dZ2 = dA2 * self.relu_deriv(self.Z2)
+        dW2 = self.A1.T.dot(dZ2) + self.lambda_reg * self.W2
+        db2 = np.sum(dZ2, axis=0, keepdims=True)
 
-        # gradient descent
-        self.weights3 -= self.learning_rate * grad_weights3
-        self.biases3 -= self.learning_rate * grad_biases3
+        dA1 = dZ2.dot(self.W2.T)
+        dZ1 = dA1 * self.relu_deriv(self.Z1)
+        dW1 = X.T.dot(dZ1) + self.lambda_reg * self.W1
+        db1 = np.sum(dZ1, axis=0, keepdims=True)
 
-        self.weights2 -= self.learning_rate * grad_weights2
-        self.biases2 -= self.learning_rate * grad_biases2
+        # update
+        self.W3 -= self.lr * dW3; self.b3 -= self.lr * db3
+        self.W2 -= self.lr * dW2; self.b2 -= self.lr * db2
+        self.W1 -= self.lr * dW1; self.b1 -= self.lr * db1
 
-        self.weights1 -= self.learning_rate * grad_weights1
-        self.biases1 -= self.learning_rate * grad_biases1
+    def train(self, X, y, epochs=15, batch_size=64):
+        # turn y into one‐hot
+        Y_onehot = np.eye(self.b3.shape[1])[y]
+        for epoch in range(epochs):
+            # shuffle
+            perm = np.random.permutation(len(X))
+            X_sh, Y_sh = X[perm], Y_onehot[perm]
 
-    def train(self, inputs, labels, epochs=10):
-        for _ in range(epochs):
-            self.forward(inputs)
-            self.backward(inputs, labels)
+            # mini‐batches
+            for i in range(0, len(X), batch_size):
+                X_batch = X_sh[i:i+batch_size]
+                Y_batch = Y_sh[i:i+batch_size]
+                self.forward(X_batch)
+                self.backward(X_batch, Y_batch)
 
-    def predict(self, inputs):
-        probabilities = self.forward(inputs)
-        return np.argmax(probabilities, axis=1)
+    def predict(self, X):
+        probs = self.forward(X)
+        return np.argmax(probs, axis=1)
